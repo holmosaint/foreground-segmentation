@@ -229,17 +229,11 @@ class res_net(nn.Module):
 
     def forward(self, image):
         out = self.net(image)
-        print(out.shape)
         out = self.decoder_block0(out)
-        print(out.shape)
         out = self.decoder_block1(out)
-        print(out.shape)
         out = self.decoder_block2(out)
-        print(out.shape)
         out = self.decoder_block3(out)
-        print(out.shape)
         out = self.decoder_block4(out)
-        print(out.shape)
 
         return out
         
