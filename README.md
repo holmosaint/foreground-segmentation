@@ -30,3 +30,5 @@ train_datagen = ImageDataGenerator(rotation_range=0.2,
                 fill_mode='nearest')
 Also note that the image is rescaled under factor 1/256.
 ```
+
+After fine-tuning on the poor-performance images, and stimulated annealing for the best threshold after 30 iterations, the F-score comes to **0.81**. So I believe the problem is on the model architecture and image preprocessing. Many poor-performance images' foreground is darker than the background, but the majority of the dataset is the opposite. We should consider this problem carefully. 
