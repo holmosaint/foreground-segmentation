@@ -255,7 +255,7 @@ def train_keras_aug(train_image_list, train_mask_list, val_image_list, val_mask_
                 print("Early Stop at epoch {}".format(t))
                 break
             elif not_improve % 10 == 0 and not_improve > 0:
-                adjust_learning_rate(optim)
+                adjust_learning_rate(adam)
         print("\tTrain loss: {}; Valid loss: {}".format(train_loss / step_per_epoch, val_loss / 6))
 
 
