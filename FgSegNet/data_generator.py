@@ -5,28 +5,25 @@ import imgaug as ia
 import imgaug.augmenters as iaa
 import matplotlib.pyplot as plt
 
+crop_width = 160 
+crop_height = 160
+scale_up = iaa.Sequential([iaa.Affine(scale={"x": 1.5, "y": 2.0})])
 sometimes = lambda aug: iaa.Sometimes(0.5, aug)
-aug_flip_horizontal = iaa.Sequential([iaa.Fliplr(0.5), iaa.CropToFixedSize(256, 256)]) # horizontally flip 50% of all images
-aug_flip_vertical = iaa.Sequential([iaa.Flipud(0.2), iaa.CropToFixedSize(256, 256)]) # vertically flip 20% of all images
-aug_crop = iaa.Sequential([
-    sometimes(iaa.CropAndPad(
-        percent=(-0.05, 0.1),
-        pad_mode=ia.ALL,
-        pad_cval=(0, 255)
-        )),
-    iaa.CropToFixedSize(256, 256)])    # crop images by -5% to 10% of their height/width
+aug_flip_horizontal = iaa.Sequential([iaa.Fliplr(0.5), iaa.CropToFixedSize(crop_width, crop_height)]) # horizontally flip 50% of all images
+aug_flip_vertical = iaa.Sequential([iaa.Flipud(0.2), iaa.CropToFixedSize(crop_width, crop_height)]) # vertically flip 20% of all images
+aug_crop = iaa.Sequential([iaa.CropToFixedSize(crop_width, crop_height)])    # crop images by -5% to 10% of their height/width
 aug_affine = iaa.Sequential([        
     sometimes(iaa.Affine(
-        scale={"x": (0.8, 1.2), "y": (0.8, 1.2)}, # scale images to 80-120% of their size, individually per axis
-        translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)}, # translate by -20 to +20 percent (per axis)
+        scale={"x": (0.9, 1.1), "y": (0.9, 1.1)}, # scale images to 80-120% of their size, individually per axis
+        translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)}, # translate by -20 to +20 percent (per axis)
         rotate=(-45, 45), # rotate by -45 to +45 degrees
         shear=(-16, 16), # shear by -16 to +16 degrees
         order=[0, 1], # use nearest neighbour or bilinear interpolation (fast)
         cval=(0, 255), # if mode is constant, use a cval between 0 and 255
         mode=ia.ALL # use any of scikit-image's warping modes (see 2nd image from the top for examples)
         )), 
-    iaa.CropToFixedSize(256, 256)])
-aug_invert = iaa.Sequential([iaa.Invert(0.8, per_channel=False), iaa.CropToFixedSize(256, 256)]) # invert
+    iaa.CropToFixedSize(crop_width, crop_height)])
+aug_invert = iaa.Sequential([iaa.Invert(0.8, per_channel=False), iaa.CropToFixedSize(crop_width, crop_height)]) # invert
 
 aug_list = [aug_flip_horizontal, aug_flip_vertical, aug_crop, aug_affine, aug_invert]
 
@@ -104,12 +101,25 @@ def Augmentation(image_list, mask_list):
     mask_aug_list = list()
     # image_aug_list.extend(image_list)
     # mask_aug_list.extend(mask_list)
+    # image_list ,mask_list = scale_up(images=image_list, heatmaps=mask_list)
+    # for image in image_list:
+    #     if image.shape[0] < crop_width or image.shape[1] < crop_height:
+    #         print("Image shape: ", image.shape)
     for aug_method in aug_list:
         aug_image, aug_mask = aug_method(images=image_list, heatmaps=mask_list)
+        # print("Aug image type: ", type(aug_image))
+        # print("Aug image shape: ", aug_image[0].shape)
+        # for image in aug_image:
+        #     if image.shape != (crop_width, crop_height, 3):
+        #         print("Wrong shape: ", image.shape)
+        #         print("Wrong mathod: ", aug_method)
+                #break 
         image_aug_list.extend(aug_image)
         mask_aug_list.extend(aug_mask)
-        
-    return np.array(image_aug_list), np.array(mask_aug_list)
+    
+    print("Total image after augmentation: {}".format(len(image_aug_list)))
+    print("Aug shape: ", image_aug_list[0].shape)
+    return np.array(image_aug_list).reshape(-1, crop_width, crop_height, 3), np.array(mask_aug_list).reshape(-1, crop_width, crop_height, 1)
 
 
 def DataGenerator(data_dir, gt_dir,augmentation=True):
@@ -118,6 +128,7 @@ def DataGenerator(data_dir, gt_dir,augmentation=True):
     for _, _, image_name in os.walk(data_dir):
         image_name_list.extend(image_name)
     
+    print("Image dir: ", data_dir)
     image_name_list = [x for x in image_name_list if x.endswith(".jpg")]
     image_name_list.sort()
 
@@ -125,9 +136,12 @@ def DataGenerator(data_dir, gt_dir,augmentation=True):
     for image_name in image_name_list:
         image_path = os.path.join(data_dir, image_name)
         image = cv2.imread(image_path)
+        """if image.shape[0] < 256 or image.shape[1] < 256:
+           print("Small Image: ", image_name, image.shape)"""
         image_list.append(image)
     
-    """The mask in the gt dir should be named as ID_gt.bmp"""
+    """The mask i the gt dir should be named as ID_gt.bmp"""
+    print("Mask dir: ", gt_dir)
     mask_name_list = list()
     for _, _, mask_name in os.walk(gt_dir):
         mask_name_list.extend(mask_name)
@@ -139,6 +153,10 @@ def DataGenerator(data_dir, gt_dir,augmentation=True):
     for mask_name in mask_name_list:
         mask_path = os.path.join(gt_dir, mask_name)
         mask = cv2.imread(mask_path)
+        mask = mask[:, :, 0].astype(np.float32)
+        mask[mask >= 1.0] = 1.0
+        mask[mask < 0] = 0
+        mask = np.expand_dims(mask, axis=-1)
         mask_list.append(mask)
     
     if not augmentation:

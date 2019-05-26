@@ -185,7 +185,7 @@ class res_net(nn.Module):
         """Decoder"""
         """Block 5"""
         self.decoder_block0 = nn.Sequential(*[
-            nn.ConvTranspose2d(512*3, 64, kernel_size=1, stride=1, padding=0),
+            nn.ConvTranspose2d(512, 64, kernel_size=1, stride=1, padding=0),
             nn.BatchNorm2d(64),
             nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2, padding=2, output_padding=1), # upsampling
             nn.BatchNorm2d(64),
@@ -221,7 +221,7 @@ class res_net(nn.Module):
         ])
         """Block 9"""
         self.decoder_block4 = nn.Sequential(*[
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=0), # upsampling
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=1), # upsampling
             nn.BatchNorm2d(64),
             nn.ConvTranspose2d(64, 1, kernel_size=1, stride=1),
         ])
@@ -229,11 +229,17 @@ class res_net(nn.Module):
 
     def forward(self, image):
         out = self.net(image)
+        # print(out.shape)
         out = self.decoder_block0(out)
+        # print(out.shape)
         out = self.decoder_block1(out)
+        # print(out.shape)
         out = self.decoder_block2(out)
+        # print(out.shape)
         out = self.decoder_block3(out)
-        out = self.decoder_block4(out)
+        # print(out.shape)
+        out = F.sigmoid(self.decoder_block4(out))
+        # print(out.shape)
 
         return out
         

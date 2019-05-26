@@ -6,6 +6,7 @@ from data_generator import DataGenerator
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn.utils import shuffle
 
 parser = argparse.ArgumentParser(description="Foreground Segmentation for 2019 PKU Image Processing Course")
 parser.add_argument("--gpu", default=[False], help="Whether to use gpu", nargs=1, type=bool)
@@ -30,22 +31,28 @@ def adjust_learning_rate(optimizer):
         param_group['lr'] /= 5
 
 
-def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoch, step_per_epoch, batch, net):
+def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoch, step_per_epoch, batch, net, device):
     lst_train_loss = 1e8
     lst_val_loss = 1e8
     not_improve = 0
     train_sample_num = train_image_list.shape[0]
     val_sample_num = val_image_list.shape[0]
+    # print(train_image_list.shape)
     adam = optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=1e-3, weight_decay=1e-3, amsgrad=True)
+    print("Training started!")
     for t in range(epoch):
         print("Epoch {}".format(t))
+        train_image_list, train_mask_list = shuffle(train_image_list, train_mask_list, random_state=0)
         train_loss = 0.0
         val_loss = 0.0
         """Train"""
-        for s in range(step_per_epoch):
-            sample = np.random.choice(train_sample_num, batch)
-            images = train_image_list[sample:, ]
-            masks = train_mask_list[sample:, ]
+        for s in range(0, train_sample_num, batch):
+            # sample = np.random.choice(train_sample_num, batch)
+            sample = np.arange(s, min(s + batch, train_sample_num)).astype(np.int)
+            images = train_image_list[sample, :]
+            masks = train_mask_list[sample, :]
+            images = torch.FloatTensor(images).to(device).permute(0, 3, 1, 2)
+            masks = torch.FloatTensor(masks).to(device).permute(0, 3, 1, 2)
             pre_mask = net(images)
             loss = F.binary_cross_entropy(pre_mask, masks)
             loss = loss.mean(0)
@@ -59,9 +66,11 @@ def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoc
         """Validation"""
         for s in range(0, val_sample_num, batch):
             sample = np.arange(s, min(s + batch, val_sample_num)).astype(np.int)
-            images = val_image_list[sample:, ]
-            masks = val_mask_list[sample:, ]
-            pre_mask = net(images).detech()
+            images = val_image_list[sample, :]
+            masks = val_mask_list[sample, :]
+            images = torch.FloatTensor(images).to(device).permute(0, 3, 1, 2)
+            masks = torch.FloatTensor(masks).to(device).permute(0, 3, 1, 2)
+            pre_mask = net(images).detach()
             loss = F.binary_cross_entropy(pre_mask, masks)
             loss = loss.mean(0)
             val_loss += loss.item()
@@ -79,7 +88,7 @@ def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoc
             elif not_improve % 10 == 0 and not_improve > 0:
                 adjust_learning_rate(adam)
 
-        print("\tTrain loss {}\tVal loss {}".format(train_loss, val_loss))
+        print("\tTrain loss {}\tVal loss {}".format(train_loss / train_sample_num, val_loss / val_sample_num))
  
 
 if __name__ == "__main__":
@@ -88,12 +97,12 @@ if __name__ == "__main__":
     args_dict = dict()
     args_dict["cuda"] = args.gpu[0]
     args_dict["encoder_net"] = args.encoder[0]
-    args_dict["train_image_dir"] = args.train_image_dir[0]
-    args_dict["train_mask_dir"] = args.train_mask_dir[0]
-    args_dict["val_image_dir"] = args.val_image_dir[0]
-    args_dict["val_mask_dir"] = args.val_mask_dir[0]
-    args_dict["test_image_dir"] = args.test_image_dir[0]
-    args_dict["test_mask_dir"] = args.test_mask_dir[0]
+    args_dict["train_image_dir"] = args.train_image_dir
+    args_dict["train_mask_dir"] = args.train_mask_dir
+    args_dict["val_image_dir"] = args.val_image_dir
+    args_dict["val_mask_dir"] = args.val_mask_dir
+    args_dict["test_image_dir"] = args.test_image_dir
+    args_dict["test_mask_dir"] = args.test_mask_dir
     args_dict["is_train"] = args.train[0]
     args_dict["is_test"] = args.test[0]
     args_dict["epoch"] = args.epoch[0]
@@ -106,13 +115,14 @@ if __name__ == "__main__":
         device = torch.device("cpu")
 
     encoder = Encoder(structure=args_dict["encoder_net"], cuda=args_dict["cuda"])
+    net = encoder.net.to(device)
     train_image_list, train_mask_list = DataGenerator(data_dir=args_dict["train_image_dir"], gt_dir=args_dict["train_mask_dir"], augmentation=True)
     val_image_list, val_mask_list = DataGenerator(data_dir=args_dict["val_image_dir"], gt_dir=args_dict["val_mask_dir"], augmentation=True)
     # test_image_list, test_mask_list = DataGenerator(data_dir=args_dict["test_image_dir"], gt_dir=args_dict["test_mask_dir"], augmentation=False)
 
-    if args_dict["train"]:
+    if args_dict["is_train"]:
         train(train_image_list, train_mask_list, val_image_list, val_mask_list, 
-            epoch=args_dict["epoch"], step_per_epoch=args_dict["step_per_epoch"], net=encoder, batch=args_dict["batch"])
+            epoch=args_dict["epoch"], step_per_epoch=args_dict["step_per_epoch"], net=net, batch=args_dict["batch"], device=device)
     
-    if args_dict["test"]:
+    if args_dict["is_test"]:
         pass
