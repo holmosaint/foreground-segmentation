@@ -23,9 +23,10 @@ aug_affine = iaa.Sequential([
         mode=ia.ALL # use any of scikit-image's warping modes (see 2nd image from the top for examples)
         )), 
     iaa.CropToFixedSize(crop_width, crop_height)])
-aug_invert = iaa.Sequential([iaa.Invert(0.8, per_channel=False), iaa.CropToFixedSize(crop_width, crop_height)]) # invert
+aug_invert = iaa.Sequential([iaa.Invert(0.8, per_channel=True), iaa.CropToFixedSize(crop_width, crop_height)]) # invert
 
-aug_list = [aug_flip_horizontal, aug_flip_vertical, aug_crop, aug_affine, aug_invert]
+# aug_list = [aug_flip_horizontal, aug_flip_vertical, aug_crop, aug_affine, aug_invert]
+aug_list = [aug_flip_horizontal, aug_flip_vertical, aug_crop, aug_invert]
 
 seq = iaa.Sequential(
     [
@@ -160,7 +161,7 @@ def DataGenerator(data_dir, gt_dir,augmentation=True):
         mask_list.append(mask)
     
     if not augmentation:
-        return np.array(image_list), np.array(mask_list)
+        return image_list, mask_list
     
     return Augmentation(image_list, mask_list)
 
