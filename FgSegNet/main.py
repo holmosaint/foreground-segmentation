@@ -168,7 +168,7 @@ def train_no_aug(train_image_list, train_mask_list, val_image_list, val_mask_lis
         print("\tTrain loss {}\tVal loss {}".format(train_loss / train_sample_num * batch, val_loss / val_sample_num * batch))
 
 
-def train_keras_aug(train_image_list, train_mask_list, val_image_list, val_mask_list, epoch, step_per_epoch, batch, net, device, encoder):
+def train_keras_aug(train_image_list, train_mask_list, val_image_list, val_mask_list, epoch, step_per_epoch, batch, net, device, encoder, steps=30):
     print("Train image: ", train_image_list)
     print("Train mask: ", train_mask_list)
     print("Val image: ", val_image_list)
@@ -220,11 +220,16 @@ def train_keras_aug(train_image_list, train_mask_list, val_image_list, val_mask_
             loss.backward()
             adam.step()
 
+            s += 1
+            if s == steps:
+                break
+
         val_loss = 0
-        for i in range(12):
+        for i in range(3):
             for gen in val_generator:
                 image, masks = gen
                 masks[masks>=1] = 1
+                masks = masks[:, :, :, 0:1]
                 image = torch.FloatTensor(image).permute(0, 3, 1, 2).to(device)
 
                 pre_mask = net(image)
