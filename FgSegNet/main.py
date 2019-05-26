@@ -232,7 +232,7 @@ def train_keras_aug(train_image_list, train_mask_list, val_image_list, val_mask_
                 masks = masks[:, :, :, 0:1]
                 image = torch.FloatTensor(image).permute(0, 3, 1, 2).to(device)
 
-                pre_mask = net(image)
+                pre_mask = net(image).detach()
 
                 if encoder == "segnet":
                     inv_masks = 1 - masks
