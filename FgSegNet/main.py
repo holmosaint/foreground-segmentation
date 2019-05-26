@@ -9,7 +9,7 @@ import torch.optim as optim
 
 parser = argparse.ArgumentParser(description="Foreground Segmentation for 2019 PKU Image Processing Course")
 parser.add_argument("--gpu", default=[False], help="Whether to use gpu", nargs=1, type=bool)
-parser.add_argument("--encoder", default="VGG", help="Choose the architecture of the encoder network: vgg or res", nargs=1)
+parser.add_argument("--encoder", default=["resnet"], help="Choose the architecture of the encoder network: vgg or res", nargs=1)
 parser.add_argument("--train_image_dir", default="./orderedImages/train", nargs=1)
 parser.add_argument("--train_mask_dir", default="./orderedTruths/train", nargs=1)
 parser.add_argument("--val_image_dir", default="./orderedImages/val", nargs=1)
@@ -38,6 +38,7 @@ def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoc
     val_sample_num = val_image_list.shape[0]
     adam = optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=1e-3, weight_decay=1e-3, amsgrad=True)
     for t in range(epoch):
+        print("Epoch {}".format(t))
         train_loss = 0.0
         val_loss = 0.0
         """Train"""
@@ -77,6 +78,8 @@ def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoc
                 break
             elif not_improve % 10 == 0 and not_improve > 0:
                 adjust_learning_rate(adam)
+
+        print("\tTrain loss {}\tVal loss {}".format(train_loss, val_loss))
  
 
 if __name__ == "__main__":
