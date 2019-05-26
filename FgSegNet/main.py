@@ -88,7 +88,7 @@ def train(train_image_list, train_mask_list, val_image_list, val_mask_list, epoc
             elif not_improve % 10 == 0 and not_improve > 0:
                 adjust_learning_rate(adam)
 
-        print("\tTrain loss {}\tVal loss {}".format(train_loss / train_sample_num, val_loss / val_sample_num))
+        print("\tTrain loss {}\tVal loss {}".format(train_loss / train_sample_num * batch, val_loss / val_sample_num * batch))
  
 
 if __name__ == "__main__":
