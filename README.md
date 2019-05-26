@@ -32,3 +32,8 @@ Also note that the image is rescaled under factor 1/256.
 ```
 
 After fine-tuning on the poor-performance images, and stimulated annealing for the best threshold after 30 iterations, the F-score comes to **0.81** with threshold 0.42. So I believe the problem is on the model architecture and image preprocessing. Many poor-performance images' foreground is darker than the background, but the majority of the dataset is the opposite. We should consider this problem carefully. 
+
+## SegNet
+I've implemented SegNet(based on others' code), the training behavior is quite good, but the final result isn't that good. The F score of on the test image is **0.73**. I believe that some of the error should go to the dataset itself. 
+
+Now I'm going to try SegNet with data augmentation using in keras. 
