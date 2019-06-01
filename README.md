@@ -2,7 +2,9 @@
 Final Project for 2019 PKU Digital Image Processing
 
 ## Raw GrabCut Algorithm
-The performance of the GrabCut algorithm over the whole dataset with 15 iteration on each image is **0.9552**, where the number of images with F-score lower than 0.80 is 39, higher than 0.95 is 781.
+The performance of the GrabCut algorithm over the whole dataset with 15 iteration on each image is **0.9552**, where the number of images with F-score lower than 0.80 is 39, higher than 0.95 is 781.\
+
+The biggest problem of GrabCut algorithm is the time consumption. The total time of GrabCut algorithm over the whole dataset is 26min 21s with 15 iterations for each picture. The avedrage time for one image is 1.581s.
 
 ## FgSegNet
 I've already implemented the PyTorch version FgSegNet_M put forward in paper "Foreground segmentation using convolutional neural networks for multiscale feature encoding" and now the model is training(Hope it works:).
@@ -42,4 +44,4 @@ The result of SegNet with data augmentation is quite good! We achieved **0.88** 
 
 Then I implemented the dense CRF layer as the postprocessing procedure to polish the probability map. After 3 iteration on the map, we achieve **0.91** F-score on the whole dataset. 
 
-The next step and the final step is to test the WaterShed algorithm, and implement vgg-w-mask architecture! Good luck!!!
+The next step and the final step is to test the WaterShed algorithm, implement vgg-w-mask architecture and test GrabCut in one cut! Good luck!!!
