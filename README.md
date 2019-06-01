@@ -37,3 +37,9 @@ After fine-tuning on the poor-performance images, and stimulated annealing for t
 I've implemented SegNet(based on others' code), the training behavior is quite good, but the final result isn't that good. The F score of on the test image is **0.73**. I believe that some of the error should go to the dataset itself. 
 
 Now I'm going to try SegNet with data augmentation using in keras. 
+
+The result of SegNet with data augmentation is quite good! We achieved **0.88** F-score which is currently the best result among our models. 
+
+Then I implemented the dense CRF layer as the postprocessing procedure to polish the probability map. After 3 iteration on the map, we achieve **0.91** F-score on the whole dataset. 
+
+The next step and the final step is to test the WaterShed algorithm, and implement vgg-w-mask architecture! Good luck!!!
