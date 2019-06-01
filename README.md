@@ -6,6 +6,9 @@ The performance of the GrabCut algorithm over the whole dataset with 15 iteratio
 
 The biggest problem of GrabCut algorithm is the time consumption. The total time of GrabCut algorithm over the whole dataset is 26min 21s with 15 iterations for each picture. The avedrage time for one image is 1.581s.
 
+## GrabCut in one cut
+I've tested the performance of a new algorithm which is variation of GrabCut algorithm -- GrabCut in one cut. It's much faster than GrabCut. The average processing time for each image is 0.187s. The average F-score is **0.94**.
+
 ## FgSegNet
 I've already implemented the PyTorch version FgSegNet_M put forward in paper "Foreground segmentation using convolutional neural networks for multiscale feature encoding" and now the model is training(Hope it works:).
 
