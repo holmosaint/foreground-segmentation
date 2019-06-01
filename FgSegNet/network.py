@@ -9,14 +9,16 @@ import numpy as np
 
 class Encoder():
     def __init__(self, structure="vgg", cuda=False):
-        if structure not in ["vgg", "resnet", "segnet"]:
-            print("The architecture of the encoder should be either 'vgg', 'resnet' or 'segnet', got {} instead.".format(structure))
+        if structure not in ["vgg", "resnet", "segnet", "vgg_skip"]:
+            print("The architecture of the encoder should be either 'vgg', 'resnet', 'segnet' or 'vgg_skip', got {} instead.".format(structure))
             sys.exit(0)
         
         if structure == "vgg":
             self.net = vgg_net(cuda=cuda)
         elif structure == "resnet":
             self.net = res_net(cuda=cuda)
+        elif structure == "vgg_skip":
+            self.net = vgg_skip()
         else:
             self.net = SegNet()
 
@@ -367,10 +369,172 @@ class _Decoder(nn.Module):
         return self.features(unpooled)
 
 
+class vgg_skip(nn.Module):
+    """SegNet: A Deep Convolutional Encoder-Decoder Architecture for
+    Image Segmentation. https://arxiv.org/abs/1511.00561
+    See https://github.com/alexgkendall/SegNet-Tutorial for original models.
+    Args:
+        num_classes (int): number of classes to segment
+        n_init_features (int): number of input features in the fist convolution
+        drop_rate (float): dropout rate of each encoder/decoder module
+        filter_config (list of 5 ints): number of output features at each level
+    """
+    def __init__(self, num_classes=2, n_init_features=3, drop_rate=0.5,
+                 filter_config=[64, 128, 256, 512]):
+        super(vgg_skip, self).__init__()
+
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+        # setup number of conv-bn-relu blocks per module and number of filters
+        encoder_n_layers = [2, 2, 3, 3, 3]
+        encoder_filter_config = [n_init_features,] + filter_config
+        decoder_n_layers = [3, 3, 3, 2, 1]
+        decoder_filter_config = filter_config[::-1] + [filter_config[0],]
+        # load_layer = [[0, 2], [5, 7], [10, 12, 14], [17, 19, 21], None, None]
+        load_layer = [None for x in range(6)]
+        grad = [True, True, True, True, True, True]
+
+        for i in range(len(filter_config)):
+            # encoder architecture
+            self.encoders.append(vgg_encoder(encoder_filter_config[i],
+                                          encoder_filter_config[i + 1],
+                                          encoder_n_layers[i], drop_rate, load_layer=load_layer[i], no_grad=grad[i]))
+
+            # decoder architecture
+            """if i == len(filter_config) - 1:
+                decoder_filter_config[i] *= 3
+                print(decoder_filter_config[i])"""
+            self.decoders.append(vgg_decoder(decoder_filter_config[i],
+                                          decoder_filter_config[i + 1],
+                                          decoder_n_layers[i], drop_rate))
+
+        self.connect = nn.Conv2d(3*512, 512, kernel_size=1)
+
+        # final classifier (equivalent to a fully connected layer)
+        self.classifier = nn.Conv2d(filter_config[0], num_classes, 3, 1, 1)
+
+    def forward(self, x):
+        indices = []
+        unpool_sizes = []
+        feat_in = x# .permute(0, 2, 3, 1).cpu().numpy()
+        feat = x
+        feat_list = []
+
+        # encoder path, keep track of pooling indices and features size
+        for t in range(3):
+            if t > 0:
+                # print(feat_in.shape)
+                """feat_in = cv2.pyrDown(feat_in)
+                feat_in = torch.FloatTensor(feat_in).cuda()"""
+                feat_in = F.interpolate(feat_in, scale_factor=0.5, mode="bilinear")
+                feat = feat_in
+            for i in range(0, 4):
+                (feat, ind), size = self.encoders[i](feat)
+                if t == 0:
+                    indices.append(ind)
+                    unpool_sizes.append(size)
+            feat_list.append(feat)
+
+        feat_list[1] = F.interpolate(feat_list[1], size=feat_list[0].shape[2:], mode="bilinear")
+        feat_list[2] = F.interpolate(feat_list[2], size=feat_list[0].shape[2:], mode="bilinear")
+        feat = torch.cat(feat_list, dim=1)
+        feat = self.connect(feat)
+        # decoder path, upsampling with corresponding indices and size
+        for i in range(0, 4):
+            feat = self.decoders[i](feat, indices[3 - i], unpool_sizes[3 - i])
+
+        return F.softmax(self.classifier(feat), dim=1)
+
+
+vgg_model = vgg(pretrained=True)
+class vgg_encoder(nn.Module):
+    def __init__(self, n_in_feat, n_out_feat, n_blocks=2, drop_rate=0.5, no_grad=False, load_layer=None):
+        super(vgg_encoder, self).__init__()
+        # assert load_layer is not None
+
+        conv1 = nn.Conv2d(n_in_feat, n_out_feat, 3, 1, 1)
+        if load_layer is not None:
+            conv1.weight.data.copy_(vgg_model.features[load_layer[0]].weight.data)
+            conv1.bias.data.copy_(vgg_model.features[load_layer[0]].bias.data)
+            conv1.weight.requires_grad = no_grad
+            conv1.bias.requires_grad = no_grad
+        layers = [conv1,
+                  nn.BatchNorm2d(n_out_feat),
+                  nn.ReLU(inplace=True)]
+
+        if n_blocks > 1:
+            assert n_blocks <= 3
+            if n_blocks == 3:
+                conv3 = nn.Conv2d(n_out_feat, n_out_feat, 3, 1, 1)
+                if load_layer is not None:
+                    conv3.weight.data.copy_(vgg_model.features[load_layer[2]].weight.data)
+                    conv3.bias.data.copy_(vgg_model.features[load_layer[2]].bias.data)
+                    conv3.weight.requires_grad = no_grad
+                    conv3.bias.requires_grad = no_grad
+                layers += [conv3,
+                           nn.BatchNorm2d(n_out_feat),
+                           nn.ReLU(inplace=True),
+                           nn.Dropout(drop_rate)]
+            elif n_blocks == 2:
+                conv2 = nn.Conv2d(n_out_feat, n_out_feat, 3, 1, 1)
+                if load_layer is not None:
+                    conv2.weight.data.copy_(vgg_model.features[load_layer[1]].weight.data)
+                    conv2.bias.data.copy_(vgg_model.features[load_layer[1]].bias.data)
+                    conv2.weight.requires_grad = no_grad
+                    conv2.bias.requires_grad = no_grad
+                layers += [conv2,
+                           nn.BatchNorm2d(n_out_feat),
+                           nn.ReLU(inplace=True)]
+
+        self.features = nn.Sequential(*layers)
+
+    def forward(self, x):
+        output = self.features(x)
+        return F.max_pool2d(output, 2, 2, return_indices=True), output.size()
+
+
+class vgg_decoder(nn.Module):
+    """Decoder layer decodes the features by unpooling with respect to
+    the pooling indices of the corresponding decoder part.
+    Args:
+        n_in_feat (int): number of input features
+        n_out_feat (int): number of output features
+        n_blocks (int): number of conv-batch-relu block inside the decoder
+        drop_rate (float): dropout rate to use
+    """
+    def __init__(self, n_in_feat, n_out_feat, n_blocks=2, drop_rate=0.5, no_grad=False, load_layer=None):
+        super(vgg_decoder, self).__init__()
+
+        conv1 = nn.Conv2d(n_in_feat, n_out_feat, 3, 1, 1)
+        layers = [conv1,
+                  nn.BatchNorm2d(n_out_feat),
+                  nn.ReLU(inplace=True)]
+
+        if n_blocks > 1:
+            assert n_blocks <= 3
+            if n_blocks == 3:
+                conv3 = nn.Conv2d(n_out_feat, n_out_feat, 3, 1, 1)
+                layers += [conv3,
+                           nn.BatchNorm2d(n_out_feat),
+                           nn.ReLU(inplace=True),
+                           nn.Dropout(drop_rate)]
+            elif n_blocks == 2:
+                conv2 = nn.Conv2d(n_out_feat, n_out_feat, 3, 1, 1)
+                layers += [conv2,
+                           nn.BatchNorm2d(n_out_feat),
+                           nn.ReLU(inplace=True)]
+
+        self.features = nn.Sequential(*layers)
+
+    def forward(self, x, indices, size):
+        unpooled = F.max_unpool2d(x, indices, 2, 2, 0, size)
+        return self.features(unpooled)
+
+
 if __name__ == "__main__":
-    net = SegNet()
+    net = vgg_skip()
     # image = cv2.imread("./30001_gt.bmp")
-    image = np.random.uniform(0, 1, size=(256, 256, 3))
+    image = np.random.uniform(0, 1, size=(233, 233, 3))
     print("Image shape: ", image.shape)
     out = net(torch.FloatTensor(image).unsqueeze(0).permute(0, 3, 1, 2))
     print(out.shape)
